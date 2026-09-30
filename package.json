@@ -1,0 +1,8 @@
+{
+  "name": "plane-moving-targets-vicsek",
+  "version": "1.0.0",
+  "description": "Vicsek-model agents chasing aligned moving targets, with tunable homing strength",
+  "main": "index.html",
+  "scripts": { "start": "npx serve ." },
+  "license": "MIT"
+}

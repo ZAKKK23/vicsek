@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vicsek — Aligned Moving Targets</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--card:#f3f3f3;--ag:#2a6fdb;--tg:#d33;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171a;--fg:#eee;--mut:#9aa;--card:#23262b;--ag:#6fa8ff;--tg:#ff6b6b}}
+:root[data-theme="dark"]{--bg:#15171a;--fg:#eee;--mut:#9aa;--card:#23262b;--ag:#6fa8ff;--tg:#ff6b6b}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif;padding:12px}
+h1{font-size:18px;margin:0 0 4px}
+canvas{width:100%;max-width:100%;background:var(--card);border-radius:8px;display:block}
+.panel{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 16px;margin-top:10px}
+label{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:13px}
+label input[type=range]{flex:1}
+.v{min-width:44px;text-align:right;font-variant-numeric:tabular-nums;color:var(--mut)}
+button,select{font:inherit;padding:4px 10px}
+#st{color:var(--mut);margin:4px 0}
+</style></head><body>
+<h1>Vicsek — Aligned Moving Targets</h1>
+<div id="st"></div>
+<canvas id="c" width="900" height="450"></canvas>
+<div class="panel">
+<label>Straight targets <select id="ns"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select></label>
+<label>Cells N <input id="N" type="range" min="20" max="600" step="10" value="200"><span class="v"></span></label>
+<label>Speed v0 <input id="v0" type="range" min="0.1" max="3" step="0.05" value="1"><span class="v"></span></label>
+<label>ν (homing vs. consensus) <input id="nu" type="range" min="0" max="5" step="0.05" value="2.5"><span class="v"></span></label>
+<label>Homing strength s <input id="s" type="range" min="0" max="3" step="0.05" value="1"><span class="v"></span></label>
+<label>R (radius) <input id="R" type="range" min="0.5" max="8" step="0.1" value="3"><span class="v"></span></label>
+<label>η (noise) <input id="eta" type="range" min="0" max="6.28" step="0.02" value="0.3"><span class="v"></span></label>
+<label>Horiz. speed vx <input id="vx" type="range" min="0" max="0.5" step="0.005" value="0.15"><span class="v"></span></label>
+<label>Sine amplitude <input id="amp" type="range" min="0" max="9" step="0.1" value="6"><span class="v"></span></label>
+<label>q (descent freq) <input id="q" type="range" min="0.01" max="0.3" step="0.005" value="0.05"><span class="v"></span></label>
+<label>n (rise ×q) <input id="n" type="range" min="1" max="8" step="0.5" value="3"><span class="v"></span></label>
+<span><button id="pause">Pause</button> <button id="rt">Reset Targets</button> <button id="ra">Reset Agents</button></span>
+</div>
+<script>
+const W=40,H=20,cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id),P={};
+const ids=['N','v0','nu','s','R','eta','vx','amp','q','n'];
+function read(){ids.forEach(k=>{P[k]=+$(k).value;$(k).nextElementSibling.textContent=(+$(k).value).toFixed(2)});P.ns=+$('ns').value}
+ids.forEach(k=>$(k).addEventListener('input',()=>{read();if(k==='N')initAgents()}));
+$('ns').onchange=()=>{read();resetTargets()};
+let ag=[],tx=W/2,phi=0,t=0,paused=false,T=[];
+function initAgents(){ag=[];for(let i=0;i<P.N;i++)ag.push({x:Math.random()*W,y:Math.random()*H,th:Math.random()*2*Math.PI})}
+function resetTargets(){tx=W/2;phi=0;t=0}
+function wrap(d,L){return d-L*Math.round(d/L)}
+function targets(){const a=[];for(let i=0;i<P.ns;i++)a.push({x:tx,y:H*(i+1)/(P.ns+1)*0.5+H*0.5*(i%2)*0+ (i+1)*H/(P.ns+2)});
+ a.push({x:tx,y:H/2+P.amp*Math.cos(phi)});return a}
+function step(){
+ tx=(tx+P.vx+W)%W;
+ phi+= (phi%(2*Math.PI)<Math.PI?P.q:P.n*P.q); phi%=2*Math.PI;
+ T=targets();const R2=P.R*P.R,n=ag.length,cs=new Float64Array(n),sn=new Float64Array(n);
+ for(let i=0;i<n;i++){let c=0,s=0;const a=ag[i];
+  for(let j=0;j<n;j++){const b=ag[j],dx=wrap(a.x-b.x,W),dy=wrap(a.y-b.y,H);if(dx*dx+dy*dy<=R2){c+=Math.cos(b.th);s+=Math.sin(b.th)}}
+  const m=Math.hypot(c,s)||1;c/=m;s/=m;
+  let best=1e9,hx=0,hy=0;
+  for(const g of T){const dx=wrap(g.x-a.x,W),dy=g.y-a.y,d=Math.hypot(dx,dy);if(d<best){best=d;hx=dx/(d||1);hy=dy/(d||1)}}
+  const w=P.nu*P.s; // homing weight = ν · s
+  cs[i]=c+w*hx;sn[i]=s+w*hy}
+ for(let i=0;i<n;i++){const a=ag[i];a.th=Math.atan2(sn[i],cs[i])+P.eta*(Math.random()-.5);
+  a.x=(a.x+P.v0*0.1*Math.cos(a.th)+W)%W;a.y=(a.y+P.v0*0.1*Math.sin(a.th)+H)%H}
+ t++}
+function draw(){
+ const sx=cv.width/W,sy=cv.height/H,cs=getComputedStyle(document.documentElement);
+ ctx.clearRect(0,0,cv.width,cv.height);
+ ctx.fillStyle=cs.getPropertyValue('--ag');
+ for(const a of ag){ctx.beginPath();ctx.arc(a.x*sx,cv.height-a.y*sy,2.5,0,7);ctx.fill()}
+ ctx.fillStyle=cs.getPropertyValue('--tg');
+ for(const g of T){ctx.beginPath();ctx.arc(g.x*sx,cv.height-g.y*sy,6,0,7);ctx.fill()}
+ $('st').textContent=`t = ${t} | ${T.length} aligned targets (${P.ns} straight + 1 sine) | homing weight ν·s = ${(P.nu*P.s).toFixed(2)}`}
+$('pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Resume':'Pause'};
+$('rt').onclick=resetTargets;$('ra').onclick=initAgents;
+read();initAgents();T=targets();
+(function loop(){if(!paused)step();draw();requestAnimationFrame(loop)})();
+</script></body></html>
